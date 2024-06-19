@@ -1,73 +1,39 @@
-import { v4 as uuidv4 } from 'uuid';
-import { NextResponse } from 'next/server';
+import fetch from 'node-fetch';
 
-const users = new Map();
-const AUTH_TOKEN = process.env.SCIM_AUTH_TOKEN; // Ensure to set this environment variable
+export default async function handler(req, res) {
+  if (req.method === 'POST') {
+    const { email, password } = req.body;
 
-export async function POST(request) {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || authHeader !== `Bearer ${AUTH_TOKEN}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+    try {
+      const response = await fetch(`${process.env.OKTA_DOMAIN}/api/v1/users?activate=true`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `SSWS ${process.env.OKTA_API_TOKEN}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          profile: {
+            email,
+            login: email,
+          },
+          credentials: {
+            password: { value: password },
+          },
+        }),
+      });
 
-  const body = await request.json();
-  const newUser = {
-    id: uuidv4(),
-    ...body,
-    schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
-  };
-  users.set(newUser.id, newUser);
-  return NextResponse.json(newUser, { status: 201 });
-}
+      const data = await response.json();
 
-export async function GET(request) {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || authHeader !== `Bearer ${AUTH_TOKEN}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const userId = request.nextUrl.searchParams.get('id');
-  if (userId) {
-    const user = users.get(userId);
-    if (user) {
-      return NextResponse.json(user, { status: 200 });
-    } else {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      if (response.ok) {
+        res.status(200).json({ message: 'User created successfully!' });
+      } else {
+        res.status(response.status).json({ message: data.errorSummary });
+      }
+    } catch (error) {
+      res.status(500).json({ message: 'Internal Server Error' });
     }
   } else {
-    const userList = Array.from(users.values());
-    return NextResponse.json({ Resources: userList, totalResults: userList.length }, { status: 200 });
-  }
-}
-
-export async function PUT(request) {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || authHeader !== `Bearer ${AUTH_TOKEN}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const body = await request.json();
-  const userId = request.nextUrl.searchParams.get('id');
-  if (users.has(userId)) {
-    const updatedUser = { ...users.get(userId), ...body };
-    users.set(userId, updatedUser);
-    return NextResponse.json(updatedUser, { status: 200 });
-  } else {
-    return NextResponse.json({ error: 'User not found' }, { status: 404 });
-  }
-}
-
-export async function DELETE(request) {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || authHeader !== `Bearer ${AUTH_TOKEN}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const userId = request.nextUrl.searchParams.get('id');
-  if (users.has(userId)) {
-    users.delete(userId);
-    return new NextResponse(null, { status: 204 });
-  } else {
-    return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    res.status(405).json({ message: 'Method Not Allowed' });
   }
 }
