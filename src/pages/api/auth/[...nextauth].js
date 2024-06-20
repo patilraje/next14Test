@@ -1,11 +1,11 @@
-// src/pages/api/auth/nextauth.js
+// src/pages/api/auth/[...nextauth].js
 import NextAuth from 'next-auth';
-import Providers from 'next-auth/providers';
+import OktaProvider from 'next-auth/providers/okta';
 import { SamlStrategy } from '@node-saml/passport-saml';
 
 export default NextAuth({
   providers: [
-    {
+    OktaProvider({
       id: 'okta',
       name: 'Okta',
       type: 'saml',
@@ -16,7 +16,7 @@ export default NextAuth({
         callbackUrl: `${process.env.NEXTAUTH_URL}/api/auth/callback/okta`,
         cert: process.env.OKTA_SAML_CERT,
       },
-    },
+    }),
   ],
   callbacks: {
     async signIn({ user, account, profile }) {
